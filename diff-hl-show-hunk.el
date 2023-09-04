@@ -66,6 +66,10 @@
 (defvar diff-hl-show-hunk--original-overlay nil
   "Copy of the diff-hl hunk overlay.")
 
+(defvar diff-hl-show-hunk--current-footer
+  "(q)Quit  (p)Previous  (n)Next  (r)Revert  (c)Copy original"
+  "String to be displaye din the footer. ")
+
 (defgroup diff-hl-show-hunk nil
   "Show vc diffs in a posframe or popup."
   :group 'diff-hl)
@@ -272,7 +276,7 @@ BUFFER is a buffer with the hunk."
              (when smart-lines
                (when (not (eq 0 original-lines-number))
                  original-lines-number)))
-            (footer "(q)Quit  (p)Previous  (n)Next  (r)Revert  (c)Copy original"))
+            (footer diff-hl-show-hunk--current-footer))
         (unless diff-hl-show-staged-changes
           (setq footer (concat footer " (S)Stage")))
         (diff-hl-inline-popup-show
