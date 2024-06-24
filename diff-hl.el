@@ -198,8 +198,8 @@ the current version of the file)."
   "When non-nil, `diff-hl-update' will run asynchronously.
 
 This can help prevent Emacs from freezing, especially by a slow version
-control (VC) backend. Remote files will not be affected since this feature
-does not work reliably with them."
+control (VC) backend. It's disabled in remote buffers, though, since it
+didn't work reliably in such during testing."
   :type 'boolean)
 
 (defvar diff-hl-reference-revision nil
@@ -807,7 +807,7 @@ Only supported with Git."
 (defun diff-hl-stage-dwim (&optional with-edit)
   "Stage the current hunk or choose the hunks to stage.
 When called with the prefix argument, invokes `diff-hl-stage-some'."
-  (interactive "p")
+  (interactive "P")
   (if (or with-edit (region-active-p))
       (call-interactively #'diff-hl-stage-some)
     (call-interactively #'diff-hl-stage-current-hunk)))
@@ -1098,7 +1098,7 @@ CONTEXT-LINES is the size of the unified diff context, defaults to 0."
     (let* ((dest-buffer (or dest-buffer "*diff-hl-diff-buffer-with-reference*"))
            (backend (or backend (vc-backend file)))
            (temporary-file-directory
-            (if (file-directory-p "/dev/shm/")
+            (if (and (eq system-type 'gnu/linux) (file-directory-p "/dev/shm/"))
                 "/dev/shm/"
               temporary-file-directory))
            (rev
