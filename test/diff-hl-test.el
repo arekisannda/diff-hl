@@ -117,6 +117,7 @@
     (insert "added\n")
     (save-buffer)
     (diff-hl-mode 1)
+    (diff-hl-update)
     (diff-hl-previous-hunk)
     (should (looking-at "added"))
     (diff-hl-previous-hunk)
@@ -127,6 +128,7 @@
     (should-error (diff-hl-next-hunk) :type 'user-error)))
 
 (diff-hl-deftest diff-hl-indirect-buffer-move-async ()
+  (skip-unless (>= emacs-major-version 27)) ;No `main-thread'.
   (diff-hl-test-in-source
    (let ((diff-hl-update-async t))
      (narrow-to-region (point-min) (point-max))
@@ -136,11 +138,13 @@
      (insert "added\n")
      (save-buffer)
      (diff-hl-mode 1)
+     (diff-hl-update)
 
-     ;; wait for all thread to complete.
-     (dolist (thread (all-threads))
-       (unless (eq thread main-thread)
-         (thread-join thread)))
+     (while (or (process-live-p
+                  (get-buffer-process " *diff-hl* "))
+                (process-live-p
+                  (get-buffer-process " *diff-hl-reference* ")))
+       (accept-process-output nil 0.05))
 
      (diff-hl-previous-hunk)
      (should (looking-at "added"))
@@ -162,13 +166,14 @@
     (save-buffer)
     (let ((diff-hl-show-staged-changes t))
       (should
-       (equal (diff-hl-changes)
-              '((1 1 insert)
-                (12 1 insert)))))
-    (let ((diff-hl-show-staged-changes nil))
+       (null
+        (assoc-default :reference (diff-hl-changes)))))
+    (let* ((diff-hl-show-staged-changes nil)
+           (res-buf (assoc-default :reference (diff-hl-changes))))
       (should
-       (equal (diff-hl-changes)
-              '((12 1 insert)))))))
+       (equal
+        (diff-hl-changes-from-buffer res-buf)
+        '((1 1 0 insert)))))))
 
 (diff-hl-deftest diff-hl-flydiff-can-ignore-staged-changes ()
   (diff-hl-test-in-source
@@ -182,13 +187,13 @@
       (should
        (equal (diff-hl-changes-from-buffer
                (diff-hl-diff-buffer-with-reference buffer-file-name))
-              '((1 1 insert)
-                (12 1 insert)))))
+              '((1 1 0 insert)
+                (12 1 0 insert)))))
     (let ((diff-hl-show-staged-changes nil))
       (should
        (equal (diff-hl-changes-from-buffer
                (diff-hl-diff-buffer-with-reference buffer-file-name))
-              '((12 1 insert)))))))
+              '((12 1 0 insert)))))))
 
 (diff-hl-deftest diff-hl-can-split-away-no-trailing-newline ()
   (diff-hl-test-in-source
@@ -206,17 +211,30 @@
             (diff-hl-diff-skip-to 10)))
         (let ((inhibit-read-only t))
           (diff-hl-split-away-changes 3))
-        (should (equal (buffer-substring (point) (point-max))
-                       "@@ -9,2 +9,2 @@
+        (should (string-prefix-p
+                 "@@ -9,2 +9,2 @@
 \x20
 -last line
 +last line
 \\ No newline at end of file
 
-"))))))
+Diff finished."
+                 (buffer-substring (point) (point-max))))))))
 
-(defun diff-hl-run-tests ()
-  (ert-run-tests-batch))
+(diff-hl-deftest diff-hl-resolved-reference-revision-buffer-local-hg ()
+  (diff-hl-test-in-source
+   (setq-local diff-hl-reference-revision "test-rev")
+   (setq-local vc-hg-program "chg")
+   (condition-case err
+       (progn
+         (diff-hl-resolved-reference-revision 'Hg)
+         (ert-fail "Expected an error to be signaled but none was."))
+     ;; We don't have a hg repo, but we can use the error message to verify the
+     ;; underlying command.
+     (error
+      (should (string-match-p
+               "chg .*identify -r test-rev -i"
+               (error-message-string err)))))))
 
 (provide 'diff-hl-test)
 
